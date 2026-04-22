@@ -17,8 +17,9 @@
 
 <br/>
 
-**A production-grade hybrid deep learning system for clinical-quality MRI brain tumor classification.**
-*OpenCV 6-stage preprocessing · EfficientNetB4 + Fine-tuning · 3-view TTA · Grad-CAM (top_conv) · Flask Web UI*
+**Type: Computer-Aided Diagnosis (CAD) System**  
+**A production-grade hybrid deep learning system for clinical-quality MRI brain tumor classification.**  
+*OpenCV 6-stage preprocessing · EfficientNetB4 + Fine-tuning · 5-view TTA · Grad-CAM Tumor Localization · Flask Web UI*
 
 <br/>
 
@@ -39,9 +40,10 @@
 | **Model** | EfficientNetB4 (ImageNet pretrained) + Custom Head |
 | **Training** | Phase A: frozen base · Phase B: unfreeze last 30 layers |
 | **Loss** | `CategoricalFocalCrossentropy` + class_weight `{glioma: 1.5}` |
-| **Inference** | 3-view TTA (normal + h-flip + v-flip) → `np.mean(axis=0)` |
-| **Explainability** | Grad-CAM via `GradientTape` on `top_conv` layer |
-| **Backend** | Flask `/predict` REST API |
+| **Inference** | 5-view TTA (normal + h-flip + v-flip + rot90°CW + rot90°CCW) → `np.mean(axis=0)` + temperature scaling |
+| **Explainability** | Grad-CAM Tumor Localization (Model Attention Map) via `GradientTape` on `top_conv` layer |
+| **Inference Time** | ~0.5–1.2 seconds per image (preprocessing + 5-view TTA + Grad-CAM) |
+| **System Type** | Computer-Aided Diagnosis (CAD) |
 
 ---
 
@@ -65,6 +67,10 @@
 </div>
 
 > *"Glioma detection remains slightly lower (83% recall) due to its irregular morphology — a known challenge in MRI classification literature."*
+
+> **Data Integrity:** All results are obtained on a strictly unseen test set with no overlap with training or validation data.
+
+> **Confidence Calibration Note:** Confidence values are derived from temperature-scaled softmax outputs (T=1.3). Raw softmax probabilities may be overconfident; calibration further improves reliability in clinical settings.
 
 ### 📈 Architecture Progression
 
@@ -388,6 +394,20 @@ venv\Scripts\python.exe src\evaluate.py
 | **No DICOM metadata** | Patient metadata (age, symptoms, prior scans) is not incorporated — a real clinical system would use multimodal inputs |
 | **Dataset domain** | Trained on the Kaggle Brain Tumor MRI dataset — performance on MRI scans from different hospital scanners or imaging protocols may vary |
 | **Decision-support only** | This system must not replace a qualified radiologist or neuro-oncologist diagnosis |
+
+---
+
+### 🔍 Failure Case Analysis
+
+Glioma misclassifications were observed primarily in cases with:
+- **Diffuse tumor boundaries** — irregular margins that blend with surrounding tissue
+- **Low contrast regions** — tumors with T1/T2 intensity similar to adjacent brain matter
+- **Overlap with normal tissue intensity** — particularly in early-stage or infiltrative gliomas
+
+This aligns with known challenges in MRI-based tumor classification literature and motivates the use of:
+- Class weighting (`glioma: 1.5`) to increase sensitivity
+- Focal Loss to focus training on hard examples
+- The uncertainty flag (`confidence < 85%`) to alert clinicians
 
 ---
 
