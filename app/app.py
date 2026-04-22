@@ -88,6 +88,23 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
 # Download model if on Render and missing
 download_model_if_missing()
 
+# ── Keras Compatibility Patch ─────────────────────────────────────
+# The model was saved with a Keras build that serializes
+# 'quantization_config' in Dense layer configs.  Older/newer
+# Keras runtimes don't accept that kwarg in Dense.__init__,
+# causing a TypeError on load.  We strip it here before
+# deserialisation so the load always succeeds.
+import keras as _keras
+_orig_dense_from_config = _keras.layers.Dense.from_config.__func__
+
+@classmethod
+def _compat_dense_from_config(cls, config):
+    config.pop('quantization_config', None)
+    return _orig_dense_from_config(cls, config)
+
+_keras.layers.Dense.from_config = _compat_dense_from_config
+# ─────────────────────────────────────────────────────────────────
+
 # Load model once on startup (expensive operation)
 print("Loading NeuroScan model...")
 if not os.path.exists(MODEL_PATH):
@@ -95,7 +112,7 @@ if not os.path.exists(MODEL_PATH):
     print("          Please place 'neuroscan_efficientnet_final.keras' in the models/ folder.")
     model = None
 else:
-    model = tf.keras.models.load_model(MODEL_PATH)
+    model = tf.keras.models.load_model(MODEL_PATH, compile=False)
     print(f"Model loaded successfully.")
 
 
