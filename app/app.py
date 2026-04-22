@@ -74,7 +74,7 @@ def download_model_if_missing():
     try:
         import gdown
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        gdown.download(gdrive_url, MODEL_PATH, quiet=False, fuzzy=True)
+        gdown.download(gdrive_url, MODEL_PATH, quiet=False)
         print("[INFO] Model downloaded successfully.")
     except Exception as e:
         print(f"[ERROR] Failed to download model: {e}")
