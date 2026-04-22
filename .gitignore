@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Dataset (too large for GitHub)
+dataset/
+dataset_cropped/
+dataset_cropped.zip
+
+# Model weights (too large — upload manually to Render disk)
+models/*.keras
+models/*.h5
+
+# Results / outputs
+results/confusion_matrix.png
+results/report.txt
+results/training_log_phaseA.csv
+results/training_log_phaseB.csv
+
+# Uploaded files & heatmaps
+app/static/uploads/
+app/static/heatmaps/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
