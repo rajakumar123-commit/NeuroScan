@@ -145,9 +145,9 @@ flowchart TD
 
 ---
 
-### Stage 2 — 3-View Test-Time Augmentation (`app/app.py`)
+### Stage 2 — 5-View Test-Time Augmentation (`app/app.py`)
 
-> The cleaned image is evaluated from 3 geometric angles simultaneously to remove orientation bias.
+> The cleaned image is evaluated from **5 geometric angles** simultaneously to maximise orientation robustness.
 
 ```mermaid
 flowchart TD
@@ -156,19 +156,23 @@ flowchart TD
     A --> B["View 1 · img_normal\nOriginal cleaned image\nimg_resized = cv2.resize(processed_img, 260,260)"]
     A --> C["View 2 · img_hf\nHorizontal Mirror\ncv2.flip(img_resized, 1)"]
     A --> D["View 3 · img_vf\nVertical Flip\ncv2.flip(img_resized, 0)"]
+    A --> E["View 4 · img_rot90cw\n90° Clockwise Rotation\ncv2.rotate(img_resized, ROTATE_90_CLOCKWISE)"]
+    A --> F["View 5 · img_rot90ccw\n90° Counter-Clockwise\ncv2.rotate(img_resized, ROTATE_90_COUNTERCLOCKWISE)"]
 
     subgraph PRE["EfficientNet Preprocessing"]
-        B & C & D --> E["tf.keras.applications.efficientnet.preprocess_input()\nScales pixel values to EfficientNetB4 internal range"]
+        B & C & D & E & F --> G["tf.keras.applications.efficientnet.preprocess_input()\nScales pixel values to EfficientNetB4 internal range"]
     end
 
     subgraph BATCH["Batch Assembly"]
-        E --> F["np.array([img_normal, img_hf, img_vf], dtype=np.float32)\nShape: (3, 260, 260, 3)"]
+        G --> H["np.array([img_normal, img_hf, img_vf, img_rot90cw, img_rot90ccw], dtype=np.float32)\nShape: (5, 260, 260, 3)"]
     end
 
-    F --> G["🧠 model.predict(tta_batch, verbose=0)\nAll 3 views inferred simultaneously\nOutput shape: (3, 4)"]
+    H --> I["🧠 model.predict(tta_batch, verbose=0)\nAll 5 views inferred simultaneously\nOutput shape: (5, 4)"]
+    I --> J["raw_confidences = np.mean(predictions, axis=0)\nconfidences = calibrate_probs(raw, temperature=1.3)\nFinal shape: (4,)"]
 
     style A fill:#1e3a5f,color:#fff
-    style G fill:#6d28d9,color:#fff
+    style I fill:#6d28d9,color:#fff
+    style J fill:#065f46,color:#fff
     style PRE fill:#1e293b,color:#ccc
     style BATCH fill:#1e293b,color:#ccc
 ```
