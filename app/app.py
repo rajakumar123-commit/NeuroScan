@@ -14,6 +14,7 @@ import sys
 import json
 import uuid
 import numpy as np
+import cv2
 
 # Add src directory to path
 SRC_DIR = os.path.join(os.path.dirname(__file__), '..', 'src')
@@ -247,9 +248,14 @@ def predict():
 
 
 if __name__ == '__main__':
+    # ── LOCAL RUN ─────────────────────────────────────────────────
+    # Run from project root:  python app/app.py
+    # Then open:              http://localhost:5000
+    # For full TTA: uncomment LOCAL MODE block, comment PRODUCTION block
+    # ──────────────────────────────────────────────────────────────
     port = int(os.environ.get('PORT', 5000))
     print("\n" + "=" * 50)
-    print("  NeuroScan Web UI")
-    print(f"  Open: http://0.0.0.0:{port}")
+    print("  NeuroScan — Local Demo Mode")
+    print(f"  Open: http://localhost:{port}")
     print("=" * 50 + "\n")
-    app.run(debug=False, host='0.0.0.0', port=port)
+    app.run(debug=True, host='localhost', port=port)
