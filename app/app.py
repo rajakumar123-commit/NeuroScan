@@ -178,17 +178,35 @@ def predict():
         # ── 3. Predict ────────────────────────────────────
         img_resized = cv2.resize(processed_img, (260, 260))
 
-        # Single inference (memory-safe for 512MB free tier)
-        # TTA disabled to prevent OOM crash on Render free tier
+        # ╔══════════════════════════════════════════════════════════╗
+        # ║  PRODUCTION MODE  (Render free tier — 512MB RAM)        ║
+        # ║  Single inference — no TTA to prevent OOM crash         ║
+        # ║  ✅ Keep this ACTIVE when deploying to Render            ║
+        # ╚══════════════════════════════════════════════════════════╝
         img_input = np.expand_dims(img_resized.astype(np.float32), axis=0)
         img_input = tf.keras.applications.efficientnet.preprocess_input(img_input)
-
-        predictions = model.predict(img_input, verbose=0)
+        predictions    = model.predict(img_input, verbose=0)
         raw_confidences = predictions[0]
+        tta_batch      = img_input   # used by Grad-CAM below
 
-        # Keep a reference for Grad-CAM (same preprocessed input)
-        tta_batch = img_input
-
+        # ╔══════════════════════════════════════════════════════════╗
+        # ║  LOCAL MODE  (your machine — run locally with full TTA) ║
+        # ║  5-View TTA gives higher accuracy                       ║
+        # ║  ✅ Uncomment this block + comment out PRODUCTION block  ║
+        # ║     when running: python app/app.py                     ║
+        # ╚══════════════════════════════════════════════════════════╝
+        # img_normal   = img_resized
+        # img_hf       = cv2.flip(img_resized, 1)
+        # img_vf       = cv2.flip(img_resized, 0)
+        # img_rot90cw  = cv2.rotate(img_resized, cv2.ROTATE_90_CLOCKWISE)
+        # img_rot90ccw = cv2.rotate(img_resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # tta_batch = np.array(
+        #     [img_normal, img_hf, img_vf, img_rot90cw, img_rot90ccw],
+        #     dtype=np.float32
+        # )
+        # tta_batch       = tf.keras.applications.efficientnet.preprocess_input(tta_batch)
+        # predictions     = model.predict(tta_batch, verbose=0)
+        # raw_confidences = np.mean(predictions, axis=0)
 
         # ── Temperature Scaling (Fix 2) ───────────────────
         confidences = calibrate_probs(raw_confidences, temperature=1.3)
