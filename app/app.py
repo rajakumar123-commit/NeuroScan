@@ -175,26 +175,20 @@ def predict():
         if processed_img is None:
             return jsonify({'error': 'Image failed quality gate. Please upload a clear MRI scan.'}), 422
 
-        import cv2
-        # ── 3. Predict (Test-Time Augmentation) ──────────
+        # ── 3. Predict ────────────────────────────────────
         img_resized = cv2.resize(processed_img, (260, 260))
 
-        # ── 5-View TTA (upgraded from 3-view) ────────────
-        # Covers more geometric orientations for robustness
-        img_normal   = img_resized
-        img_hf       = cv2.flip(img_resized, 1)
-        img_vf       = cv2.flip(img_resized, 0)
-        img_rot90cw  = cv2.rotate(img_resized, cv2.ROTATE_90_CLOCKWISE)
-        img_rot90ccw = cv2.rotate(img_resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        # Single inference (memory-safe for 512MB free tier)
+        # TTA disabled to prevent OOM crash on Render free tier
+        img_input = np.expand_dims(img_resized.astype(np.float32), axis=0)
+        img_input = tf.keras.applications.efficientnet.preprocess_input(img_input)
 
-        tta_batch = np.array(
-            [img_normal, img_hf, img_vf, img_rot90cw, img_rot90ccw],
-            dtype=np.float32
-        )
-        tta_batch = tf.keras.applications.efficientnet.preprocess_input(tta_batch)
+        predictions = model.predict(img_input, verbose=0)
+        raw_confidences = predictions[0]
 
-        predictions = model.predict(tta_batch, verbose=0)
-        raw_confidences = np.mean(predictions, axis=0)
+        # Keep a reference for Grad-CAM (same preprocessed input)
+        tta_batch = img_input
+
 
         # ── Temperature Scaling (Fix 2) ───────────────────
         confidences = calibrate_probs(raw_confidences, temperature=1.3)
