@@ -68,14 +68,15 @@
 
 ### 📈 Architecture Progression
 
-| Phase | Model | Val Accuracy | Params |
-|:---|:---|:---:|:---:|
-| Baseline | VGG16 (frozen) | 89.40% | 138M |
-| Phase C Fine-tune | VGG16 (top-4 unfreeze) | 92.50% | 138M |
-| Phase A | EfficientNetB4 (head only) | 88.81% | 19M |
-| **Phase B (Final)** | **EfficientNetB4 (last 30 unfreeze)** | **98.10%** | **19M** |
+| Phase | Model | Val Accuracy | Test Accuracy | Params |
+|:---|:---|:---:|:---:|:---:|
+| Baseline | VGG16 (frozen) | 89.40% | — | 138M |
+| Phase C Fine-tune | VGG16 (top-4 unfreeze) | 92.50% | — | 138M |
+| Phase A | EfficientNetB4 (head only) | 88.81% | — | 19M |
+| **Phase B (Final)** | **EfficientNetB4 (last 30 unfreeze)** | **98.10% ✓** | **94.88% ✓** | **19M** |
 
-> **7× fewer parameters than VGG16, ~9% higher accuracy — due to Compound Scaling.**
+> **Validation accuracy (98.10%)** = best epoch on held-out val split during training.  
+> **Test accuracy (94.88%)** = final one-time evaluation on 1600 completely unseen images — the only number that matters for scientific validation.
 
 ---
 
@@ -373,6 +374,20 @@ venv\Scripts\python.exe src\evaluate.py
 | *Why Dropout 0.4 + 0.3?* | Forces redundant neural pathways — kills memorization of training data patterns |
 
 > **Viva Statement:** *"We validated the model on a completely unseen test set of 1600 MRI images (400 per class). The model achieved 94.88% accuracy, and Grad-CAM confirms that predictions are based on tumor regions — not skull, background, or artifacts."*
+
+---
+
+## ⚠️ Model Limitations
+
+> Honest acknowledgement of limitations is a hallmark of rigorous research.
+
+| Limitation | Detail |
+|:---|:---|
+| **Glioma recall is lower (83%)** | Glioma tumors have highly irregular morphology and variable boundaries — the hardest class in MRI classification literature |
+| **2D slice classification only** | The model classifies individual 2D MRI slices, not full 3D volumetric scans (DICOM/NIfTI). Tumors span multiple slices — a single slice may be ambiguous |
+| **No DICOM metadata** | Patient metadata (age, symptoms, prior scans) is not incorporated — a real clinical system would use multimodal inputs |
+| **Dataset domain** | Trained on the Kaggle Brain Tumor MRI dataset — performance on MRI scans from different hospital scanners or imaging protocols may vary |
+| **Decision-support only** | This system must not replace a qualified radiologist or neuro-oncologist diagnosis |
 
 ---
 

@@ -99,6 +99,21 @@ else:
     print(f"Model loaded successfully.")
 
 
+# ─────────────────────────────────────────────────────────────────
+# CONFIDENCE CALIBRATION (Temperature Scaling)
+# Removes overconfidence — makes predictions clinically realistic.
+# Reference: Guo et al., "On Calibration of Modern Neural Networks" (ICML 2017)
+# ─────────────────────────────────────────────────────────────────
+def calibrate_probs(probs, temperature=1.3):
+    """
+    Apply temperature scaling to soften overconfident softmax outputs.
+    Higher temperature → softer, more honest probabilities.
+    """
+    log_probs = np.log(probs + 1e-8) / temperature
+    exp_probs = np.exp(log_probs - np.max(log_probs))  # numerical stability
+    return exp_probs / np.sum(exp_probs)
+
+
 @app.route('/')
 def index():
     """Serve the main dashboard page."""
@@ -147,21 +162,35 @@ def predict():
         # ── 3. Predict (Test-Time Augmentation) ──────────
         img_resized = cv2.resize(processed_img, (260, 260))
 
-        img_normal = img_resized
-        img_hf     = cv2.flip(img_resized, 1)
-        img_vf     = cv2.flip(img_resized, 0)
+        # ── 5-View TTA (upgraded from 3-view) ────────────
+        # Covers more geometric orientations for robustness
+        img_normal   = img_resized
+        img_hf       = cv2.flip(img_resized, 1)
+        img_vf       = cv2.flip(img_resized, 0)
+        img_rot90cw  = cv2.rotate(img_resized, cv2.ROTATE_90_CLOCKWISE)
+        img_rot90ccw = cv2.rotate(img_resized, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
-        tta_batch = np.array([img_normal, img_hf, img_vf], dtype=np.float32)
+        tta_batch = np.array(
+            [img_normal, img_hf, img_vf, img_rot90cw, img_rot90ccw],
+            dtype=np.float32
+        )
         tta_batch = tf.keras.applications.efficientnet.preprocess_input(tta_batch)
 
         predictions = model.predict(tta_batch, verbose=0)
-        confidences = np.mean(predictions, axis=0)
+        raw_confidences = np.mean(predictions, axis=0)
 
-        pred_idx    = int(np.argmax(confidences))
-        pred_class  = CLASSES[pred_idx]
-        confidence  = float(confidences[pred_idx]) * 100
+        # ── Temperature Scaling (Fix 2) ───────────────────
+        confidences = calibrate_probs(raw_confidences, temperature=1.3)
+
+        pred_idx   = int(np.argmax(confidences))
+        pred_class = CLASSES[pred_idx]
+        confidence = float(confidences[pred_idx]) * 100
 
         breakdown = {cls: round(float(confidences[i]) * 100, 2) for i, cls in enumerate(CLASSES)}
+
+        # ── Glioma Uncertainty Flag (Fix 3) ──────────────
+        # Glioma has lower recall (83%) — flag uncertain predictions
+        glioma_uncertain = (pred_class == 'glioma' and confidence < 85.0)
 
         # ── 4. Grad-CAM ──────────────────────────────────
         heatmap_filename = f"heatmap_{uid}.jpg"
@@ -172,15 +201,16 @@ def predict():
         # ── 5. Return JSON ───────────────────────────────
         meta = CLASS_META[pred_class]
         return jsonify({
-            'success':        True,
-            'diagnosis':      meta['label'],
-            'class':          pred_class,
-            'confidence':     round(confidence, 2),
-            'color':          meta['color'],
-            'icon':           meta['icon'],
-            'breakdown':      breakdown,
-            'heatmap_url':    f"/static/heatmaps/{heatmap_filename}",
-            'upload_url':     f"/static/uploads/{upload_filename}",
+            'success':          True,
+            'diagnosis':        meta['label'],
+            'class':            pred_class,
+            'confidence':       round(confidence, 2),
+            'color':            meta['color'],
+            'icon':             meta['icon'],
+            'breakdown':        breakdown,
+            'heatmap_url':      f"/static/heatmaps/{heatmap_filename}",
+            'upload_url':       f"/static/uploads/{upload_filename}",
+            'glioma_uncertain': glioma_uncertain,
         })
 
     except Exception as e:

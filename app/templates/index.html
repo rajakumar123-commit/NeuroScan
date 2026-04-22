@@ -1260,6 +1260,17 @@ function renderResults(data) {
 
   document.getElementById('confNote').textContent = meta.note;
 
+  // Glioma uncertainty warning (Fix 3)
+  const existingWarn = document.getElementById('gliomaWarn');
+  if (existingWarn) existingWarn.remove();
+  if (data.glioma_uncertain) {
+    const warn = document.createElement('div');
+    warn.id = 'gliomaWarn';
+    warn.style.cssText = 'margin-top:0.8rem;padding:0.6rem 0.9rem;background:var(--red-bg);border:1px solid var(--red-border);border-radius:5px;font-size:0.75rem;color:var(--red);font-family:var(--mono);';
+    warn.textContent = '⚠ High uncertainty — Glioma classification below 85% confidence. Morphological irregularity detected. Immediate radiologist review recommended.';
+    document.getElementById('confNote').parentNode.appendChild(warn);
+  }
+
   // Probability rows
   const probRows = document.getElementById('probRows');
   probRows.innerHTML = '';
