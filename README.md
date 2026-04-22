@@ -11,9 +11,14 @@
 
 <br/>
 
+
 [![Accuracy](https://img.shields.io/badge/✅_Test_Accuracy-94.88%25_Verified-22c55e?style=for-the-badge)](https://github.com/rajakumar123-commit/NeuroScan)
 [![Dataset](https://img.shields.io/badge/📊_Test_Set-1600_Unseen_MRIs_(400_per_class)-3b82f6?style=for-the-badge)](https://github.com/rajakumar123-commit/NeuroScan)
 [![Classes](https://img.shields.io/badge/🧠_Classes-Glioma_·_Meningioma_·_No_Tumor_·_Pituitary-f59e0b?style=for-the-badge)](https://github.com/rajakumar123-commit/NeuroScan)
+
+<br/>
+
+[![Live Demo](https://img.shields.io/badge/🔴_Live_Demo-neuroscan--mzur.onrender.com-ef4444?style=for-the-badge)](https://neuroscan-mzur.onrender.com)
 
 <br/>
 
