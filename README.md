@@ -65,6 +65,109 @@
 
 ---
 
+## 🖥️ Web App — Full Feature List
+
+> Everything the clinical dashboard (`app/templates/index.html`) provides:
+
+| Feature | Description |
+|:---|:---|
+| **Drag & Drop Upload** | Drag MRI image or click to browse — live preview before submission |
+| **Supported Formats** | `.jpg` `.jpeg` `.png` `.bmp` `.webp` — max **16MB** |
+| **Real-time Inference** | Full pipeline runs in ~0.5–1.2 seconds |
+| **Diagnosis Result** | Class name, color-coded badge (🔴 Tumor / 🟢 No Tumor) |
+| **Confidence Bar** | Animated confidence percentage with calibrated honesty |
+| **4-Class Probability Breakdown** | Animated bars for all 4 classes simultaneously |
+| **Grad-CAM Heatmap** | Jet colormap overlay — blue=low, red=tumor focus |
+| **Risk Assessment Panel** | Classification · Risk Level · Growth Rate · Recommended Action |
+| **Processing Pipeline Visualization** | Shows all 7 steps: Median Filter → Gamma → CLAHE → Skull Strip → Contour Crop → TTA → EfficientNetB4 → Grad-CAM |
+| **Model Proof Panel** | Live confusion matrix (94.88% accuracy) shown directly in UI |
+| **Dark / Light Mode** | Toggle between dark clinical mode and light mode |
+| **⚠️ Glioma Uncertainty Flag** | Automatic high-risk warning banner when Glioma confidence < 85% |
+| **Mobile Responsive** | Works on phones, tablets, and desktop |
+| **Accuracy Stats Bar** | Shows 94.88% · 4 classes · EfficientNetB4 · TTA live in header |
+
+---
+
+## ⚠️ Glioma Uncertainty Flag — Clinical Safety Feature
+
+> This is one of the most important safety features in the system.
+
+```python
+# app/app.py
+glioma_uncertain = (pred_class == 'glioma' and confidence < 85.0)
+```
+
+**When triggered:** If the model predicts Glioma but confidence is below 85%, the UI shows a **red high-risk warning banner:**
+
+```
+⚠️ High uncertainty — Glioma classification below 85% confidence.
+   Morphological irregularity detected. Immediate radiologist review recommended.
+```
+
+**Why 85% threshold?**
+- Glioma recall is only 83% — the hardest class
+- Low confidence + Glioma = highest-risk combination clinically
+- Forces human review on ambiguous cases
+- Prevents dangerous false-negative dismissals
+
+> **Viva Statement:** *"We implemented a Glioma Uncertainty Flag — any Glioma prediction below 85% confidence triggers an immediate radiologist review warning. This is critical because Glioma has the lowest recall (83%) and the highest clinical risk."*
+
+---
+
+## ☁️ Production Model Auto-Download
+
+> The model file (`neuroscan_efficientnet_final.keras`) is **124MB** — too large for GitHub.  
+> On Render deployment, it auto-downloads from Google Drive on startup.
+
+```python
+# app/app.py — download_model_if_missing()
+def download_model_if_missing():
+    if os.path.exists(MODEL_PATH):
+        return  # Already there, skip
+    gdrive_url = os.environ.get('GDRIVE_MODEL_URL', '')
+    gdown.download(gdrive_url, MODEL_PATH, quiet=False)
+```
+
+**Setup on Render:**
+1. Upload `neuroscan_efficientnet_final.keras` to Google Drive → set sharing to "Anyone with link"
+2. In Render Dashboard → Environment Variables:
+   ```
+   GDRIVE_MODEL_URL = https://drive.google.com/file/d/YOUR_FILE_ID/view
+   ```
+3. On startup, Render downloads the model automatically — no manual steps needed
+
+---
+
+## 💻 CLI Prediction — Command Line Usage
+
+> Use `src/predict.py` to run inference directly from the terminal (no web browser needed).
+
+```powershell
+# Activate virtual environment first
+.\venv\Scripts\activate
+
+# Run prediction on any MRI image
+python src/predict.py path/to/your/mri_scan.jpg
+```
+
+**Sample Output:**
+```
+=============================================
+ NEUROSCAN - MRI ANALYSIS RESULTS
+=============================================
+  Diagnosis  : GLIOMA
+  Confidence : 78.90%
+---------------------------------------------
+ Breakdown:
+  - glioma      :  78.90%
+  - meningioma  :  12.40%
+  - pituitary   :   4.40%
+  - notumor     :   4.30%
+=============================================
+```
+
+---
+
 ## 📊 Dataset — Complete Breakdown
 
 > **Source:** [Kaggle Brain Tumor MRI Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset) — Masoud Nickparvar, 2021 (public medical imaging dataset)
@@ -536,7 +639,79 @@ This aligns with known challenges in MRI-based tumor classification literature a
 
 ---
 
-## 🔮 Future Improvements
+## 📁 Project Structure
+
+```
+NeuroScan/
+│
+├── app/
+│   ├── app.py                             # Flask server · /predict · TTA · Grad-CAM · auto-download
+│   ├── templates/index.html               # Clinical dashboard (dark/light · mobile responsive)
+│   └── static/
+│       ├── confusion_matrix.png           # Evaluation proof — shown live in UI
+│       ├── uploads/                       # Incoming MRI files (uuid-named, auto-created)
+│       └── heatmaps/                      # Grad-CAM overlays (uuid-named, auto-created)
+│
+├── src/
+│   ├── preprocess.py                      # 6-stage OpenCV pipeline (gamma, CLAHE, skull strip, crop)
+│   ├── grad_cam.py                        # GradientTape heatmap on top_conv layer
+│   ├── evaluate.py                        # 1600-image evaluation → confusion_matrix.png + report.txt
+│   ├── predict.py                         # CLI inference — python src/predict.py <image_path>
+│   ├── split_data.py                      # Splits raw Kaggle dataset into train/val/test folders
+│   ├── train_model.py                     # VGG16 baseline — local training script
+│   ├── train_colab.py                     # VGG16 Phase A Colab training
+│   ├── train_colab_v2.py                  # VGG16 V2 — 3 phases + label smoothing + augmentation
+│   ├── train_efficientnet.py              # EfficientNetB4 Phase A+B → 94.88% (PRODUCTION)
+│   ├── train_phaseC_efficientnet.py       # EfficientNetB4 Phase C — full unfreeze sprint
+│   └── train_phaseC_resume.py             # Resume Phase C training from checkpoint
+│
+├── models/
+│   └── neuroscan_efficientnet_final.keras # 124MB · 94.88% · not in GitHub (too large)
+│
+├── results/
+│   ├── confusion_matrix.png               # Generated by evaluate.py — embedded in web UI
+│   ├── report.txt                         # sklearn classification_report (all 4 classes)
+│   ├── test_accuracy.txt                  # Single value: 94.88 (CI/CD reference)
+│   └── training_log_phaseA.csv            # Epoch-by-epoch loss/accuracy from Phase A
+│
+├── docs/
+│   └── screenshots/                       # Live demo screenshots
+│
+├── Dockerfile                             # Docker build — python:3.10-slim + gunicorn
+├── render.yaml                            # Render.com service config (free tier)
+├── requirements.txt                       # Pinned Python dependencies
+└── README.md
+```
+
+---
+
+## 🏋️ Training Scripts Reference
+
+> All training was done on **Google Colab T4 GPU**. Final model: `train_efficientnet.py`.
+
+| Script | Model | Purpose | Result |
+|:---|:---:|:---|:---:|
+| `split_data.py` | — | Splits raw Kaggle data → train/val/test | Dataset ready |
+| `train_model.py` | VGG16 | Local baseline training | 89.40% val |
+| `train_colab.py` | VGG16 | Colab Phase A (head only) | 89.40% val |
+| `train_colab_v2.py` | VGG16 | 3-phase + label smoothing | 92.50% val |
+| **`train_efficientnet.py`** | **EfficientNetB4** | **Phase A+B → Production model** | **94.88% test ✓** |
+| `train_phaseC_efficientnet.py` | EfficientNetB4 | Full unfreeze phase C | Experimental |
+| `train_phaseC_resume.py` | EfficientNetB4 | Resume Phase C from checkpoint | Experimental |
+
+### Training Progression
+
+```
+VGG16 Baseline (frozen)     → 89.40% val   (train_model.py)
+VGG16 V2 Fine-tune          → 92.50% val   (train_colab_v2.py)
+EfficientNetB4 Phase A      → 88.81% val   (head only — frozen base)
+EfficientNetB4 Phase B      → 98.10% val   (last 30 layers unfrozen)
+                            → 94.88% TEST  ← PRODUCTION MODEL ✓
+```
+
+---
+
+
 
 | Enhancement | Description |
 |:---|:---|
