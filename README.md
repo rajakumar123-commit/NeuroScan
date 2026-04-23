@@ -52,6 +52,59 @@
 
 ---
 
+## ✅ Project Status
+
+| Component | Status |
+|:---|:---|
+| 🌐 **Live Production** | https://neuroscan-mzur.onrender.com |
+| 🖥️ **Local Demo** | `python app/app.py` → http://localhost:5000 |
+| 📖 **README** | Fully documented |
+| 🧠 **Model** | EfficientNetB4, trained on 8,623 MRI images |
+| 📊 **Accuracy** | 94.88% on 1,600 unseen test images |
+| 🎯 **Classes** | Glioma · Meningioma · Pituitary · No Tumor |
+
+---
+
+## 📊 Dataset — Complete Breakdown
+
+> **Source:** [Kaggle Brain Tumor MRI Dataset](https://www.kaggle.com/datasets/masoudnickparvar/brain-tumor-mri-dataset) — Masoud Nickparvar, 2021 (public medical imaging dataset)
+
+| Split | Images | Per Class | Purpose |
+|:---:|:---:|:---:|:---|
+| **Training** | **5,712** | ~1,428 each | Model learns from these |
+| **Validation** | **1,311** | ~328 each | Tune hyperparameters, early stopping |
+| **Test** | **1,600** | **400 exactly** | Final accuracy evaluation (never seen during training) |
+| **TOTAL** | **8,623** | | Full dataset |
+
+### 🧠 4 Classes — Per-Split Detail
+
+| Class | Train | Val | Test | Total |
+|:---:|:---:|:---:|:---:|:---:|
+| 🔴 Glioma | ~1,321 | ~300 | 400 | ~2,021 |
+| 🟠 Meningioma | ~1,339 | ~306 | 400 | ~2,045 |
+| 🟢 No Tumor | ~1,595 | ~405 | 400 | ~2,400 |
+| 🟡 Pituitary | ~1,457 | ~300 | 400 | ~2,157 |
+
+### 🔄 With Augmentation (Effective Training Data)
+
+Live augmentation was applied during training — **no images stored, generated on-the-fly**:
+
+| Technique | Value |
+|:---|:---|
+| Rotation | ±25° |
+| Width / Height Shift | ±15% |
+| Zoom | ±20% |
+| Brightness Range | [0.75 – 1.3] |
+| Horizontal Flip | ✅ Enabled |
+| Shear | ±15% |
+| Channel Shift | ±20 (simulates scanner differences) |
+
+> This effectively exposed the model to **~50,000+ augmented image variations** during training, greatly improving generalisation to real-world MRI scans from different hospital scanners.
+
+> **Viva Statement:** *"We trained on 5,712 MRI images across 4 classes. With data augmentation (rotation, flip, brightness, zoom, channel shift), the model was effectively exposed to ~50,000 image variations. Final evaluation was on 1,600 completely unseen images — 400 per class — achieving 94.88% test accuracy."*
+
+---
+
 ## 🖼️ Live Demo Screenshots
 
 > Upload any brain MRI scan → Get diagnosis + Grad-CAM heatmap in seconds.
