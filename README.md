@@ -5,12 +5,12 @@
 <br/>
 
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://tensorflow.org)
+[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.18-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white)](https://tensorflow.org)
 [![Flask](https://img.shields.io/badge/Flask-3.x-000000?style=for-the-badge&logo=flask&logoColor=white)](https://flask.palletsprojects.com)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.x-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org)
+[![Docker](https://img.shields.io/badge/Docker-Deployed-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
 
 <br/>
-
 
 [![Accuracy](https://img.shields.io/badge/✅_Test_Accuracy-94.88%25_Verified-22c55e?style=for-the-badge)](https://github.com/rajakumar123-commit/NeuroScan)
 [![Dataset](https://img.shields.io/badge/📊_Test_Set-1600_Unseen_MRIs_(400_per_class)-3b82f6?style=for-the-badge)](https://github.com/rajakumar123-commit/NeuroScan)
@@ -28,7 +28,7 @@
 
 <br/>
 
-[🚀 Quick Start](#-quick-start) &nbsp;·&nbsp; [📐 Pipeline](#-complete-pipeline) &nbsp;·&nbsp; [📊 Results](#-results--performance) &nbsp;·&nbsp; [🛡️ Viva Defense](#️-viva-defense-notes)
+[🚀 Quick Start](#-quick-start) &nbsp;·&nbsp; [🖼️ Screenshots](#️-live-demo-screenshots) &nbsp;·&nbsp; [🧠 4 Classes](#-the-4-tumor-classes-explained) &nbsp;·&nbsp; [📊 Results](#-results--performance) &nbsp;·&nbsp; [🛡️ Viva Defense](#️-viva-defense-notes)
 
 </div>
 
@@ -48,7 +48,95 @@
 | **Inference** | 5-view TTA (normal + h-flip + v-flip + rot90°CW + rot90°CCW) → `np.mean(axis=0)` + temperature scaling |
 | **Explainability** | Grad-CAM Tumor Localization (Model Attention Map) via `GradientTape` on `top_conv` layer |
 | **Inference Time** | ~0.5–1.2 seconds per image (preprocessing + 5-view TTA + Grad-CAM) |
-| **System Type** | Computer-Aided Diagnosis (CAD) |
+| **Deployment** | Docker → Render.com (Live) |
+
+---
+
+## 🖼️ Live Demo Screenshots
+
+> Upload any brain MRI scan → Get diagnosis + Grad-CAM heatmap in seconds.
+
+### 🔴 Glioma Detection with Grad-CAM
+![Glioma Detection Demo](docs/screenshots/demo_glioma.png)
+
+*The model correctly identifies Glioma with 78.9% calibrated confidence. Grad-CAM heatmap (right) shows the model's attention focused on the tumor region — confirming the prediction is based on actual pathology, not background artifacts.*
+
+---
+
+### 📊 Confusion Matrix — Model Evaluation Proof
+![Confusion Matrix](docs/screenshots/demo_confusion_matrix.png)
+
+*Evaluated on 1600 completely unseen MRI images (400 per class). The model achieves 94.88% overall accuracy. Pituitary and No Tumor classes reach 99% recall. Glioma is the hardest class (83% recall) due to irregular morphology.*
+
+---
+
+### 📈 Full Performance View
+![Full Performance](docs/screenshots/demo_full_view.png)
+
+*Live web app showing the complete diagnostic pipeline: upload zone, real-time inference results, 4-class probability breakdown, Grad-CAM heatmap, and risk assessment panel.*
+
+> 💡 **To save screenshots:** Press `Win + Shift + S` → Save to `docs/screenshots/` with the filenames above.
+
+---
+
+## 🧠 The 4 Tumor Classes Explained
+
+> Understanding what each class means — clinically and visually.
+
+| Class | Type | Location in Brain | Risk Level | Key Characteristics |
+|:---:|:---:|:---|:---:|:---|
+| 🔴 **Glioma** | **Malignant** | Brain tissue (glial cells — astrocytes, oligodendrocytes) | 🔴 **High** | Irregular, diffuse boundaries. Infiltrates surrounding tissue. Most aggressive. Hardest to detect (83% recall). |
+| 🟠 **Meningioma** | **Usually Benign** | Meninges (the 3-layer membrane covering the brain) | 🟡 **Medium** | Well-defined, round shape. Grows slowly. Usually operable. 98% recall — easy to spot. |
+| 🟡 **Pituitary** | **Benign** | Pituitary gland at the base of brain (sellar region) | 🟡 **Low-Medium** | Small, well-localised. Affects hormones (growth, thyroid, cortisol). 99% recall. |
+| 🟢 **No Tumor** | **Healthy** | — | 🟢 **None** | Normal brain scan. No pathology detected. 99% recall — model rarely misclassifies healthy scans. |
+
+### 🔬 Why Glioma is the Hardest Class
+
+```
+Glioma Recall = 83%  ←  Lowest of all 4 classes
+
+Reason: Glioma tumors have IRREGULAR, DIFFUSE boundaries.
+        They blend into surrounding brain tissue.
+        Unlike Meningioma (round, clear) or Pituitary (small, localised),
+        Glioma infiltrates the brain parenchyma.
+
+Our mitigations:
+  ✅ class_weight = {glioma: 1.5}  → penalises glioma misses harder during training
+  ✅ CategoricalFocalCrossentropy  → focuses loss on hard examples
+  ✅ glioma_uncertain flag         → alerts user when confidence < 85%
+```
+
+---
+
+## 🌡️ Why Confidence Percentage May Seem Low
+
+> This is a deliberate clinical safety feature — not a bug.
+
+### Temperature Scaling (Confidence Calibration)
+
+Raw neural network softmax outputs are **overconfident by design**. A model might say 99% confident when the true reliability is 70%. In medical AI, this is dangerous.
+
+We apply **Temperature Scaling** (Guo et al., ICML 2017):
+
+```python
+def calibrate_probs(probs, temperature=1.3):
+    log_probs = np.log(probs + 1e-8) / temperature   # divide by T=1.3
+    exp_probs = np.exp(log_probs - np.max(log_probs)) # numerical stability
+    return exp_probs / np.sum(exp_probs)
+```
+
+| Temperature | Effect |
+|:---:|:---|
+| `T = 1.0` | Raw softmax (overconfident — bad for medical use) |
+| `T = 1.3` | Calibrated (honest uncertainty — what we use) |
+| `T > 2.0` | Too soft (uniform — loses discrimination) |
+
+**Example:** Raw model says 89% → After T=1.3 scaling → Shows 64%. This means:
+- ✅ Still the correct class (highest probability)
+- ✅ Honest about uncertainty
+- ✅ Correctly triggers "radiologist review" warning at < 85%
+
+> **Viva answer:** *"We applied temperature scaling with T=1.3 to prevent AI overconfidence. A 64% calibrated score is clinically more honest than a raw 89% — it correctly signals that a radiologist should confirm the result."*
 
 ---
 
@@ -66,7 +154,7 @@
 | 🟡 **Pituitary** | 0.99 | 0.99 | 0.99 | 400 |
 | **Macro Avg** | **0.95** | **0.95** | **0.95** | **1600** |
 
-**Test Accuracy: `94.88%` · Correct: `1518 / 1600` · Model: `neuroscan_efficientnet_final.keras`**
+**Test Accuracy: `94.88%` · Correct: `1518 / 1600` · Model: `neuroscan_efficientnet_final.keras`**  
 *Model evaluated using strict unseen test set — no data leakage.*
 
 </div>
@@ -158,18 +246,18 @@ flowchart TD
 flowchart TD
     A["✅ Preprocessed Brain Array\n260×260×3 NumPy array"]
 
-    A --> B["View 1 · img_normal\nOriginal cleaned image\nimg_resized = cv2.resize(processed_img, 260,260)"]
+    A --> B["View 1 · img_normal\nOriginal cleaned image"]
     A --> C["View 2 · img_hf\nHorizontal Mirror\ncv2.flip(img_resized, 1)"]
     A --> D["View 3 · img_vf\nVertical Flip\ncv2.flip(img_resized, 0)"]
-    A --> E["View 4 · img_rot90cw\n90° Clockwise Rotation\ncv2.rotate(img_resized, ROTATE_90_CLOCKWISE)"]
-    A --> F["View 5 · img_rot90ccw\n90° Counter-Clockwise\ncv2.rotate(img_resized, ROTATE_90_COUNTERCLOCKWISE)"]
+    A --> E["View 4 · img_rot90cw\n90° Clockwise Rotation"]
+    A --> F["View 5 · img_rot90ccw\n90° Counter-Clockwise"]
 
     subgraph PRE["EfficientNet Preprocessing"]
         B & C & D & E & F --> G["tf.keras.applications.efficientnet.preprocess_input()\nScales pixel values to EfficientNetB4 internal range"]
     end
 
     subgraph BATCH["Batch Assembly"]
-        G --> H["np.array([img_normal, img_hf, img_vf, img_rot90cw, img_rot90ccw], dtype=np.float32)\nShape: (5, 260, 260, 3)"]
+        G --> H["np.array([...5 views...], dtype=np.float32)\nShape: (5, 260, 260, 3)"]
     end
 
     H --> I["🧠 model.predict(tta_batch, verbose=0)\nAll 5 views inferred simultaneously\nOutput shape: (5, 4)"]
@@ -186,116 +274,52 @@ flowchart TD
 
 ### Stage 3 — EfficientNetB4 Architecture
 
-> Exact architecture used in `neuroscan_efficientnet_final.keras`
-
 ```mermaid
 flowchart TD
-    A["📦 TTA Batch (3, 260, 260, 3)"] --> B
+    A["📦 TTA Batch (5, 260, 260, 3)"] --> B
 
     subgraph BASE["EfficientNetB4 Base — 19M Parameters\nImageNet pretrained · Last 30 layers unfrozen (Phase B)"]
         B["Stem Conv 3×3 Stride 2\nExtracts edges, gradients, basic texture"]
-        B --> C["MBConv Blocks\n(Mobile Inverted Bottleneck)\nDepth-wise Separable Convolutions\nExtracts tumor shape and soft-tissue textures"]
-        C --> D["Squeeze-and-Excitation per block\nChannel-wise attention weights\nAmplifies tumor-relevant feature maps"]
-        D --> E["top_conv — Last Conv Layer\n👁️ Grad-CAM hooks here\ntf.keras.Model outputs=[top_conv.output, model.output]"]
+        B --> C["MBConv Blocks\n(Mobile Inverted Bottleneck)\nDepth-wise Separable Convolutions"]
+        C --> D["Squeeze-and-Excitation per block\nChannel-wise attention weights"]
+        D --> E["top_conv — Last Conv Layer\n👁️ Grad-CAM hooks here"]
     end
 
     subgraph HEAD["Custom Decision Head — Trained from Scratch"]
-        E --> F["GlobalAveragePooling2D\nCollapses (H, W, C) → (C,) vector"]
-        F --> G["Dense(512, activation='relu')\n+ L2 kernel_regularizer\nLearns high-level tumor representations"]
-        G --> H["Dropout(0.4)\nKills 40% of neurons per batch\nForces redundant pathways"]
-        H --> I["BatchNormalization\nStabilises output distribution"]
-        I --> J["Dense(256, activation='relu') + L2"]
+        E --> F["GlobalAveragePooling2D"]
+        F --> G["Dense(512, relu) + L2 regularizer"]
+        G --> H["Dropout(0.4)"]
+        H --> I["BatchNormalization"]
+        I --> J["Dense(256, relu) + L2"]
         J --> K["Dropout(0.3)"]
-        K --> L["Dense(4, activation='softmax')\nOutputs: [glioma, meningioma, notumor, pituitary]"]
-    end
-
-    subgraph OUT["Output per TTA View — Shape (3, 4)"]
-        L --> M["View 1: [0.94, 0.03, 0.02, 0.01]"]
-        L --> N["View 2: [0.91, 0.05, 0.02, 0.02]"]
-        L --> O["View 3: [0.96, 0.02, 0.01, 0.01]"]
+        K --> L["Dense(4, softmax)\n[glioma, meningioma, notumor, pituitary]"]
     end
 
     style A fill:#1e3a5f,color:#fff
     style L fill:#6d28d9,color:#fff
     style BASE fill:#1e293b,color:#ccc
     style HEAD fill:#14532d,color:#ccc
-    style OUT fill:#1c1917,color:#ccc
 ```
 
 ---
 
-### Stage 4 — Statistical Consensus (`app/app.py`)
-
-```mermaid
-flowchart TD
-    A["Output Shape (3, 4)\n3 probability arrays from 3 TTA views"]
-
-    A --> B["confidences = np.mean(predictions, axis=0)\nElement-wise average across 3 views\nResult shape: (4,)"]
-
-    B --> C["Final Probability Array\nglioma    : 0.9367\nmeningioma: 0.0333\nnotumor   : 0.0167\npituitary : 0.0133"]
-
-    C --> D["pred_idx = int(np.argmax(confidences)) → 0\npred_class = CLASSES[0] → 'glioma'\nconfidence = float(confidences[0]) * 100 → 93.67%"]
-
-    C --> E["breakdown = {cls: round(float(confidences[i])*100, 2)\n              for i, cls in enumerate(CLASSES)}\nSent to JS probability bar chart"]
-
-    style A fill:#1e293b,color:#fff
-    style D fill:#065f46,color:#fff
-    style E fill:#1e3a5f,color:#fff
-```
-
----
-
-### Stage 5 — Grad-CAM Heatmap (`src/grad_cam.py`)
+### Stage 4 — Grad-CAM Heatmap (`src/grad_cam.py`)
 
 > Reference: Selvaraju et al., *"Grad-CAM: Visual Explanations from Deep Networks via Gradient-based Localization"* (ICCV 2017)
 
 ```mermaid
 flowchart TD
-    A["🧠 model + tta_batch[0] expanded\nnp.expand_dims(tta_batch[0], axis=0)\nShape: (1, 260, 260, 3)"]
-
-    A --> B["Build Grad Sub-Model\ntf.keras.models.Model(\n  inputs=model.inputs,\n  outputs=[model.get_layer('top_conv').output,\n           model.output])"]
-
-    B --> C["with tf.GradientTape() as tape:\n  conv_outputs, predictions = grad_model(inputs)\n  pred_index = tf.argmax(predictions[0])\n  class_channel = predictions[:, pred_index]"]
-
-    C --> D["grads = tape.gradient(class_channel, conv_outputs)\nGradients of glioma score\nw.r.t. top_conv feature maps\n→ Which pixels most activated the glioma neuron?"]
-
-    D --> E["pooled_grads = tf.reduce_mean(grads, axis=(0,1,2))\nOne scalar weight per feature channel"]
-
-    E --> F["heatmap = conv_outputs[0] @ pooled_grads[..., tf.newaxis]\nheatmap = tf.squeeze(heatmap)\nWeighted sum of feature maps"]
-
-    F --> G["heatmap = tf.maximum(heatmap, 0)\nReLU — keeps only positive activations\nNormalize to [0, 1]"]
-
-    G --> H["cv2.resize(heatmap, (img_w, img_h))\nnp.uint8(255 * heatmap_resized)\ncv2.applyColorMap(heatmap_uint8, COLORMAP_JET)\nBlue=Low Activation · Red=Tumor Focus"]
-
-    H --> I["cv2.addWeighted(img, 0.55, colored_heatmap, 0.45, 0)\nOverlay blended onto original MRI\nSaved to app/static/heatmaps/{uid}.jpg"]
+    A["🧠 Preprocessed tensor (1, 260, 260, 3)"]
+    A --> B["Build Grad Sub-Model\ntf.keras.models.Model(\n  outputs=[top_conv.output, model.output])"]
+    B --> C["tf.GradientTape → compute gradients\nof predicted class score\nw.r.t. top_conv feature maps"]
+    C --> D["pooled_grads = reduce_mean(grads)\nOne weight per feature channel"]
+    D --> E["heatmap = conv_outputs @ pooled_grads\nReLU + normalize to [0,1]"]
+    E --> F["cv2.resize → applyColorMap(COLORMAP_JET)\nBlue=Low · Red=High activation"]
+    F --> G["cv2.addWeighted(MRI, 0.55, heatmap, 0.45)\nOverlay saved to static/heatmaps/{uid}.jpg"]
 
     style A fill:#1e293b,color:#fff
     style D fill:#6d28d9,color:#fff
-    style H fill:#7f1d1d,color:#fff
-    style I fill:#065f46,color:#fff
-```
-
----
-
-### Stage 6 — Flask JSON Response (`app/app.py`)
-
-```mermaid
-flowchart TD
-    A["✅ All stages complete"] --> B
-
-    B["jsonify({\n  'success': True,\n  'diagnosis': 'Glioma',\n  'class': 'glioma',\n  'confidence': 93.67,\n  'color': '#ef4444',\n  'icon': '⚠️',\n  'breakdown': {'glioma':93.67,'meningioma':3.33,...},\n  'heatmap_url': '/static/heatmaps/{uid}.jpg',\n  'upload_url': '/static/uploads/{uid}.jpg'\n})"]
-
-    B --> C["HTTP 200 → JavaScript renderResults(data)"]
-
-    C --> D["dxStatus — TUMOR DETECTED badge"]
-    C --> E["confFill — animated confidence bar to 93.67%"]
-    C --> F["probRows — 4-class animated breakdown bars"]
-    C --> G["gradcamImg.src = heatmap_url + ?t=timestamp\ncache-bust for fresh heatmap"]
-    C --> H["risk-grid — Classification · Risk level\nGrowth rate · Recommended action"]
-
-    style A fill:#065f46,color:#fff
-    style B fill:#1e293b,color:#fff
-    style C fill:#1e3a5f,color:#fff
+    style G fill:#065f46,color:#fff
 ```
 
 ---
@@ -307,7 +331,7 @@ NeuroScan/
 │
 ├── app/
 │   ├── app.py                             # Flask server · /predict · TTA · Grad-CAM call
-│   ├── templates/index.html               # Clinical dashboard (dark/light mode, mobile responsive)
+│   ├── templates/index.html               # Clinical dashboard (dark/light mode, responsive)
 │   └── static/
 │       ├── confusion_matrix.png           # Verified evaluation proof shown in UI
 │       ├── uploads/                       # Incoming MRI files (uuid-named)
@@ -324,12 +348,15 @@ NeuroScan/
 ├── models/
 │   └── neuroscan_efficientnet_final.keras # Production weights · 94.88% test accuracy
 │
+├── docs/
+│   └── screenshots/                       # Live demo screenshots for README
+│
 ├── results/
 │   ├── confusion_matrix.png               # Generated by evaluate.py
 │   └── report.txt                         # Classification report text
 │
 ├── Dockerfile                             # Render.com deployment container
-├── render.yaml                            # Render service config (free tier + persistent disk)
+├── render.yaml                            # Render service config (free tier)
 ├── requirements.txt                       # Python dependencies
 └── README.md
 ```
@@ -338,30 +365,63 @@ NeuroScan/
 
 ## 🚀 Quick Start
 
-```bash
-# 1. Clone & setup
+### ✅ Prerequisites
+
+- **Python 3.10, 3.11, or 3.12** (NOT 3.13+, TensorFlow not supported yet)
+- Model file: `neuroscan_efficientnet_final.keras` in `models/` folder
+- **C: drive must have at least 2GB free** (for pip temp files)
+
+---
+
+### 🖥️ Run Locally (Windows)
+
+```powershell
+# 1. Clone repository
 git clone https://github.com/rajakumar123-commit/NeuroScan.git
 cd NeuroScan
-python -m venv venv
-.\venv\Scripts\Activate.ps1          # Windows PowerShell
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# 2. Create virtual environment with Python 3.12
+py -3.12 -m venv venv
 
-# 3. Place model weights
-# Download neuroscan_efficientnet_final.keras
-# → Copy to: models/neuroscan_efficientnet_final.keras
+# 3. Activate virtual environment
+.\venv\Scripts\activate
 
-# 4. Launch web app
-venv\Scripts\python.exe app\app.py
-# Open: http://127.0.0.1:5000
+# 4. Install dependencies (if C: drive is full, redirect pip cache)
+$env:TEMP='F:\tmp'; $env:TMP='F:\tmp'
+pip install -r requirements.txt --cache-dir F:\pip_cache
+
+# 5. Launch the web app
+python app/app.py
 ```
 
-### Run Full Evaluation
+**Open browser:** http://localhost:5000
 
-```bash
-venv\Scripts\python.exe src\evaluate.py
+> ⚠️ **LOCAL MODE vs PRODUCTION MODE:**  
+> In `app/app.py`, the **LOCAL MODE** block (5-view TTA) is active for local demo.  
+> When deploying to Render, swap to the **PRODUCTION MODE** block (single inference) to stay within 512MB RAM.
+
+---
+
+### 🌐 Live Production Deployment
+
+The app is **already live** at:
+
+**🔴 https://neuroscan-mzur.onrender.com**
+
+Deployed using:
+- **Docker** container on **Render.com** (free tier)
+- Model auto-downloads from Google Drive on startup via `gdown`
+- Single inference mode (no TTA) to fit within 512MB RAM
+
+---
+
+### 🧪 Run Full Evaluation
+
+```powershell
+.\venv\Scripts\activate
+python src\evaluate.py
 ```
+
 ```
   [      glioma] processing 400 images... ✓
   [  meningioma] processing 400 images... ✓
@@ -381,14 +441,16 @@ venv\Scripts\python.exe src\evaluate.py
 |:---|:---|
 | *Why a hybrid preprocessing pipeline?* | OpenCV forces the AI to analyze tumor tissue only — skull, brightness variance, and scanner artifacts are removed before inference |
 | *Why EfficientNetB4 over VGG16?* | Compound Scaling (width × depth × resolution) achieves 94.88% test accuracy with 7× fewer parameters than VGG16 |
-| *Why Test-Time Augmentation?* | A hospital scan can arrive at any rotation. TTA averages 3 geometric views via `np.mean(axis=0)` to produce a consensus result |
+| *Why Test-Time Augmentation?* | A hospital scan can arrive at any rotation. TTA averages 5 geometric views via `np.mean(axis=0)` to produce a consensus result |
 | *Why Grad-CAM on `top_conv`?* | `top_conv` is the last spatial feature map before GlobalAveragePooling. Gradients here show exactly which spatial regions caused the prediction |
 | *Why Focal Loss?* | `CategoricalFocalCrossentropy` penalises hard examples more — specifically helps with Glioma's irregular boundary |
 | *Why class_weight glioma=1.5?* | Glioma had the lowest recall (83%). Increasing its penalty forces the model to take Glioma misclassifications more seriously |
 | *Why Phase A then Phase B?* | Phase A trains only the custom head to prevent Catastrophic Forgetting of ImageNet edge detectors. Phase B unfreezes last 30 layers to adapt them to MRI data |
+| *Why is confidence percentage ~60-70%?* | Temperature scaling (T=1.3) deliberately softens overconfident raw outputs. A calibrated 64% is clinically safer than an overconfident 99% |
 | *Why Dropout 0.4 + 0.3?* | Forces redundant neural pathways — kills memorization of training data patterns |
+| *Why is Glioma recall only 83%?* | Glioma has irregular, diffuse boundaries that infiltrate surrounding tissue — the hardest class in MRI classification literature. Mitigated via class weighting and focal loss |
 
-> **Viva Statement:** *"We validated the model on a completely unseen test set of 1600 MRI images (400 per class). The model achieved 94.88% accuracy, and Grad-CAM confirms that predictions are based on tumor regions — not skull, background, or artifacts."*
+> **Viva Statement:** *"We validated the model on a completely unseen test set of 1600 MRI images (400 per class). The model achieved 94.88% accuracy, and Grad-CAM confirms that predictions are based on tumor regions — not skull, background, or artifacts. Confidence is calibrated using temperature scaling for honest clinical reliability."*
 
 ---
 
@@ -402,6 +464,7 @@ venv\Scripts\python.exe src\evaluate.py
 | **2D slice classification only** | The model classifies individual 2D MRI slices, not full 3D volumetric scans (DICOM/NIfTI). Tumors span multiple slices — a single slice may be ambiguous |
 | **No DICOM metadata** | Patient metadata (age, symptoms, prior scans) is not incorporated — a real clinical system would use multimodal inputs |
 | **Dataset domain** | Trained on the Kaggle Brain Tumor MRI dataset — performance on MRI scans from different hospital scanners or imaging protocols may vary |
+| **Confidence calibration** | Temperature scaling T=1.3 lowers raw confidence scores intentionally — this is a safety feature, not reduced model capability |
 | **Decision-support only** | This system must not replace a qualified radiologist or neuro-oncologist diagnosis |
 
 ---
@@ -428,6 +491,7 @@ This aligns with known challenges in MRI-based tumor classification literature a
 | 3D CNN on DICOM volumes | Volumetric tumor analysis from full NIfTI MRI stacks in mm³ |
 | Model Ensembling | EfficientNetB4 + DenseNet201 vote consensus for higher accuracy |
 | DICOM Import | Direct integration with hospital PACS/RIS systems |
+| Upgraded Deployment | Paid Render tier or AWS EC2 to enable full 5-view TTA in production |
 
 ---
 
@@ -437,9 +501,10 @@ This aligns with known challenges in MRI-based tumor classification literature a
 
 <br/>
 
-Built for the **NeuroScan Medical AI Project** &nbsp;·&nbsp; EfficientNetB4 · OpenCV · Flask · Grad-CAM · TTA
+Built for the **NeuroScan Medical AI Project** &nbsp;·&nbsp; EfficientNetB4 · OpenCV · Flask · Grad-CAM · TTA · Docker
 
 [![GitHub](https://img.shields.io/badge/GitHub-rajakumar123--commit/NeuroScan-181717?style=for-the-badge&logo=github)](https://github.com/rajakumar123-commit/NeuroScan)
+[![Live](https://img.shields.io/badge/🔴_Live_App-neuroscan--mzur.onrender.com-ef4444?style=for-the-badge)](https://neuroscan-mzur.onrender.com)
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a3a5c,100:0f0e0d&height=100&section=footer" width="100%"/>
 

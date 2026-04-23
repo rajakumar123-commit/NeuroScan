@@ -13,6 +13,7 @@ import os
 import sys
 import json
 import uuid
+import gc
 import numpy as np
 import cv2
 
@@ -182,7 +183,7 @@ def predict():
         # ╔══════════════════════════════════════════════════════════╗
         # ║  PRODUCTION MODE  (Render free tier — 512MB RAM)        ║
         # ║  Single inference — no TTA to prevent OOM crash         ║
-        # ║  ✅ Keep this ACTIVE when deploying to Render            ║
+        # ║  ✅ ACTIVE — deployed on Render                          ║
         # ╚══════════════════════════════════════════════════════════╝
         img_input = np.expand_dims(img_resized.astype(np.float32), axis=0)
         img_input = tf.keras.applications.efficientnet.preprocess_input(img_input)
@@ -191,10 +192,9 @@ def predict():
         tta_batch      = img_input   # used by Grad-CAM below
 
         # ╔══════════════════════════════════════════════════════════╗
-        # ║  LOCAL MODE  (your machine — run locally with full TTA) ║
-        # ║  5-View TTA gives higher accuracy                       ║
-        # ║  ✅ Uncomment this block + comment out PRODUCTION block  ║
-        # ║     when running: python app/app.py                     ║
+        # ║  LOCAL MODE  (your machine — full 5-View TTA)           ║
+        # ║  Higher accuracy — runs fine on local RAM               ║
+        # ║  ✅ Uncomment + comment PRODUCTION block for local demo  ║
         # ╚══════════════════════════════════════════════════════════╝
         # img_normal   = img_resized
         # img_hf       = cv2.flip(img_resized, 1)
@@ -222,11 +222,18 @@ def predict():
         # Glioma has lower recall (83%) — flag uncertain predictions
         glioma_uncertain = (pred_class == 'glioma' and confidence < 85.0)
 
-        # ── 4. Grad-CAM ──────────────────────────────────
+        # ── 4. Grad-CAM (memory-safe) ─────────────────────
         heatmap_filename = f"heatmap_{uid}.jpg"
         heatmap_path = os.path.join(HEATMAP_DIR, heatmap_filename)
-        gradcam_tensor = np.expand_dims(tta_batch[0], axis=0)
-        generate_gradcam(upload_path, gradcam_tensor, model, heatmap_path)
+        heatmap_url  = None
+        try:
+            gradcam_tensor = np.expand_dims(tta_batch[0], axis=0)
+            generate_gradcam(upload_path, gradcam_tensor, model, heatmap_path)
+            heatmap_url = f"/static/heatmaps/{heatmap_filename}"
+        except Exception as cam_err:
+            print(f"[WARNING] Grad-CAM skipped: {cam_err}")
+        finally:
+            gc.collect()   # free memory after every prediction
 
         # ── 5. Return JSON ───────────────────────────────
         meta = CLASS_META[pred_class]
@@ -238,7 +245,7 @@ def predict():
             'color':            meta['color'],
             'icon':             meta['icon'],
             'breakdown':        breakdown,
-            'heatmap_url':      f"/static/heatmaps/{heatmap_filename}",
+            'heatmap_url':      heatmap_url,
             'upload_url':       f"/static/uploads/{upload_filename}",
             'glioma_uncertain': glioma_uncertain,
         })
